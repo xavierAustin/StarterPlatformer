@@ -7,30 +7,31 @@ class Load extends Phaser.Scene {
         this.load.setPath("./assets/");
 
         // Load characters spritesheet
-        this.load.atlas("platformer_characters", "tilemap-characters-packed.png", "tilemap-characters-packed.json");
+        this.load.atlas("platformer_misc", "monochrome_tilemap_transparent_packed.png", "tilemap-other.json");
+        this.load.atlas("player_character", "fuzzydinosaur.png", "tilemap-player-packed.json");
 
         // Load tilemap information
-        this.load.image("tilemap_tiles", "tilemap_packed.png");                         // Packed tilemap
-        this.load.tilemapTiledJSON("platformer-level-1", "platformer-level-1.json");   // Tilemap in JSON
+        this.load.image("tilemap_tiles", "monochrome_tilemap_transparent_packed.png");                         // Packed tilemap
+        this.load.tilemapTiledJSON("platformer-level-1", "level0.json");   // Tilemap in JSON
     }
 
     create() {
         this.anims.create({
             key: 'walk',
-            frames: this.anims.generateFrameNames('platformer_characters', {
+            frames: this.anims.generateFrameNames('player_character', {
                 prefix: "tile_",
-                start: 0,
-                end: 1,
+                start: 3,
+                end: 6,
                 suffix: ".png",
                 zeroPad: 4
             }),
-            frameRate: 15,
+            frameRate: 8,
             repeat: -1
         });
 
         this.anims.create({
             key: 'idle',
-            defaultTextureKey: "platformer_characters",
+            defaultTextureKey: "player_character",
             frames: [
                 { frame: "tile_0000.png" }
             ],
@@ -38,11 +39,49 @@ class Load extends Phaser.Scene {
         });
 
         this.anims.create({
+            key: 'hurt',
+            defaultTextureKey: "player_character",
+            frames: [
+                { frame: "tile_0010.png" }
+            ],
+            repeat: -1
+        });
+
+        this.anims.create({
             key: 'jump',
-            defaultTextureKey: "platformer_characters",
+            defaultTextureKey: "player_character",
             frames: [
                 { frame: "tile_0001.png" }
             ],
+        });
+
+        this.anims.create({
+            key: 'fall',
+            defaultTextureKey: "player_character",
+            frames: [
+                { frame: "tile_0002.png" }
+            ],
+        });
+
+        this.anims.create({
+            key: 'duck',
+            defaultTextureKey: "player_character",
+            frames: [
+                { frame: "tile_0007.png" }
+            ],
+        });
+
+        this.anims.create({
+            key: 'roll',
+            frames: this.anims.generateFrameNames('player_character', {
+                prefix: "tile_",
+                start: 7,
+                end: 8,
+                suffix: ".png",
+                zeroPad: 4
+            }),
+            frameRate: 7,
+            repeat: -1
         });
 
          // ...and pass to the next Scene
