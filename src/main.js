@@ -39,5 +39,6 @@ var cursors;
 const SCALE = 2.0;
 var my = {sprite: {}, text: {}};
 var COINS = 0;
+var BGM = 0;
 
 const game = new Phaser.Game(config);

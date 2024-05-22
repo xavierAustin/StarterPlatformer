@@ -16,6 +16,11 @@ class Platformer extends Phaser.Scene {
         this.CURB_JUMP = 0.65;
         this.RUN_STARTUP = 6;
         this.PLAYER_BBOX = [-8*SCALE,0,8*SCALE,-14*SCALE,0,16*SCALE]; //orgin +- distance to edge
+        this.COMBO = {kills:0,timer:0,coins:0};
+        if (!BGM){
+            BGM = this.sound.add("BGM",{loop:1,volume:0.7});
+            BGM.play()
+        }
     }
 
     create() {
@@ -50,16 +55,22 @@ class Platformer extends Phaser.Scene {
             key: "platformer_misc",
             frame: "tile_0004.png"
         });
-        this.objects = [].concat(this.coins).concat(this.enemies).concat(this.bigEnemies);
+        this.objects = (this.coins).concat(this.enemies).concat(this.bigEnemies);
         for (let x of this.objects){
             x.x *= 2;
             x.y *= 2;
             x.setScale(SCALE);
         }
-        this.enemies.concat();
+        this.enemies = this.enemies.concat(this.bigEnemies);
+        for (let x of this.enemies){
+            x.velVector = {x:-0.7,y:0};
+            x.anims.play('enemyWalk');
+        }
         for (let x of this.bigEnemies){
             x.y -= 8;
+            x.velVector.x = -0.5;
             x.setScale(SCALE*1.5);
+            x.anims.play('bigEnemyWalk');
         }
 
         // set up player avatar
@@ -74,6 +85,61 @@ class Platformer extends Phaser.Scene {
         my.sprite.player.inactionable = 0;
         my.sprite.player.cayoteJmp = 0;
         my.sprite.player.prevGrounded = 0;
+        my.sprite.player.footstep = 0;
+        my.sprite.player.health = 0;
+        my.sprite.player.dead = 1;
+        my.sprite.player.anims.play('idle');
+        my.sprite.player.walkNoise = this.sound.add("walkies",{loop: 0, volume:1});
+        my.sprite.player.jumpNoise = this.sound.add("jumpies",{loop: 0, volume:0.3});
+        my.sprite.player.dashNoise = this.sound.add("dashies",{loop: 0, volume:0.25});
+        my.sprite.player.hurtNoise = this.sound.add("hurties",{loop: 0, volume:0.3});
+        my.sprite.player.bonkNoise = this.sound.add("bonkies",{loop: 0, volume:0.4})
+        my.sprite.player.deadNoise = this.sound.add("deadies",{loop: 0, volume:0.4});
+        my.sprite.player.rollNoise = this.sound.add("rollies",{loop: 0, volume:0.4});
+        my.sprite.player.rollNoise.playedOnce = 0;
+        this.coinNoise = this.sound.add("coinies",{loop: 0, volume:0.7});
+        this.killNoise = this.sound.add("killies",{loop: 0, volume:0.7});
+        this.bonkNoise = this.sound.add("destries",{loop: 0, volume:0.7});
+        my.sprite.player.blockBreak = this.add.particles(0, 0, "platformer_misc", {
+            frame: "tile_0007.png",
+            random: true,
+            scale: {start: SCALE/2, end: 0},
+            maxAliveParticles: 32,
+            lifespan: 350,
+            gravityY: 1600,
+            speedX: [-30,-15,5,15,30],
+            speedY: -30
+        });
+        my.sprite.player.blockBreak.stop()
+        my.sprite.player.enemyStomp = this.add.particles(0, 0, "platformer_misc", {
+            frame: "tile_0003.png",
+            random: true,
+            scale: {start: SCALE, end: 0},
+            maxAliveParticles: 32,
+            lifespan: 1000,
+            gravityY: 1600,
+            speedX: [-30,-15,5,15,30],
+            speedY: -150
+        });
+        my.sprite.player.enemyStomp.stop()
+        my.sprite.player.bigEnemyStomp = this.add.particles(0, 0, "platformer_misc", {
+            frame: "tile_0006.png",
+            random: true,
+            scale: {start: SCALE*1.5, end: 0},
+            maxAliveParticles: 32,
+            lifespan: 1500,
+            gravityY: 1600,
+            speedX: [-30,-15,5,15,30],
+            speedY: -70
+        });
+        my.sprite.player.bigEnemyStomp.stop()
+
+        //add score
+        this.scoreboard = {
+            text:this.add.text(48,25,"x "+COINS,{fontSize:25}).setOrigin(0,0.5),
+            coinsprite:this.make.sprite({x:25, y:25, key:"platformer_misc", frame:"tile_0000.png"}).setScale(SCALE),
+            display:COINS
+        };
 
         // set up Phaser-provided cursor key input
         cursors = this.input.keyboard.createCursorKeys();
@@ -118,7 +184,7 @@ class Platformer extends Phaser.Scene {
     //default phaser tile collision has false negatives occasionally and lets the player fall through the floor at a high enough velocity
     //no longer based on tile property; anything on ground layer will have collision
     colliding(sprite,deltaX,deltaY,edges){
-        edges = edges || [-sprite.width*originX,edges[0]+sprite.width,-sprite.height*originY,edges[2]+sprite.height];
+        edges = edges || [-8*sprite.scaleX,8*sprite.scaleX,0,7.9*sprite.scaleX];
         let halfwaypoint = edges.length/2
         for (let edgeX of edges.slice(0,halfwaypoint))
             for (let edgeY of edges.slice(halfwaypoint,edges.length))
@@ -157,9 +223,11 @@ class Platformer extends Phaser.Scene {
         //player squash and stretch
         player.setScale((player.scaleX*2 + SCALE)/3,(player.scaleY*2 + SCALE)/3);
         player.setOrigin((player.originX*2 + 0.5)/3,(player.originY*2 + 0.5)/3);
-        if (!player.prevGrounded && player.grounded){
+        if (!player.prevGrounded && player.grounded && !player.dash){
             player.setScale(SCALE*1.5,SCALE*0.5);
             player.setOrigin(0.5,0);
+            player.walkNoise.detune = -200;
+            player.walkNoise.play();
         }
         player.prevGrounded = player.cayoteJmp;
 
@@ -168,7 +236,8 @@ class Platformer extends Phaser.Scene {
             player.velVector.y += (this.GRAVITY);
             player.angle = 0;
             player.velVector.x = player.inactionable;
-            player.inactionable -= Math.sign(player.velVector.x)/90;
+            player.velVector.x *= (cursors.right.isDown - cursors.left.isDown) == Math.sign(player.inactionable) ? 1 : 0.5;
+            player.inactionable -= Math.sign(player.inactionable)/90;
             player.inactionable = player.grounded ? 0 : player.inactionable;
         }
 
@@ -187,10 +256,33 @@ class Platformer extends Phaser.Scene {
             player.anims.play(blocked ? 'hurt' : 'roll');
             player.dckRll = !blocked;
             player.velVector.x = (player.flipX^blocked) ? -7 : 7;
-            player.velVector.x *= (cursors.right.isDown - cursors.left.isDown) != Math.sign(player.velVector.x) ? 0.6 : 1;
             player.inactionable = player.velVector.x;
-            player.velVector.y = -9;
+            if (blocked)
+                player.bonkNoise.play();
+            player.velVector.y = this.JUMP_VELOCITY;
             player.setScale(SCALE*0.5,SCALE*1.5);
+            let playerXYInTile = this.groundLayer.worldToTileXY(player.x,player.y);
+            let tiles = this.groundLayer.getTilesWithin(playerXYInTile.x-player.flipX,playerXYInTile.y-1,2,3, {isNotEmpty: true});
+            for (let x of tiles){
+                if (x.index == 8){
+                    this.COMBO.coins = Math.min(this.COMBO.coins+1,15);
+                    COINS += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
+                    player.health += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
+                    this.COMBO.timer = Math.min(this.COMBO.timer+20,60);
+                    this.coinNoise.detune = this.COMBO.coins*50
+                    this.coinNoise.play();
+                }
+                if (x.index == 11){
+                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x, x.y*16*SCALE);
+                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x+8*SCALE, x.y*16*SCALE);
+                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x+8*SCALE, x.y*16*SCALE+8*SCALE);
+                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x, x.y*16*SCALE+8*SCALE);
+                }
+                if ((x.index == 8 || x.index == 11) && !this.bonkNoise.isPlaying)
+                    this.bonkNoise.play();
+            }
+            this.groundLayer.replaceByIndex(11,-1,playerXYInTile.x-player.flipX,playerXYInTile.y-1,2,3);
+            this.groundLayer.replaceByIndex(8,30,playerXYInTile.x-player.flipX,playerXYInTile.y-1,2,3);
         }
         if (Phaser.Input.Keyboard.JustDown(cursors.shift) && !player.inactionable){
             player.dash = 1;
@@ -198,11 +290,20 @@ class Platformer extends Phaser.Scene {
             player.velVector.x = player.flipX ? -24 : 24;
             player.velVector.y = -5;
             player.anims.play('jump');
+            player.dashNoise.play()
             player.angle = player.flipX ? -20 : 20;
             player.setScale(SCALE*1.5);
         }
 
         //player walk/run/roll
+        if (player.anims.currentAnim.key == 'roll' && !player.rollNoise.isPlaying && !player.rollNoise.playedOnce){
+            player.rollNoise.play();
+            player.rollNoise.playedOnce = 1;
+        }
+        if (player.anims.currentAnim.key != 'roll'){
+            player.rollNoise.stop();
+            player.rollNoise.playedOnce = 0;
+        }
         let movePlayerDir = (cursors.right.isDown - cursors.left.isDown);
         if (!player.inactionable){
             if (player.dckRll){
@@ -216,11 +317,16 @@ class Platformer extends Phaser.Scene {
                 player.setFlip(cursors.left.isDown, false);
                 player.anims.play('walk', true);
                 this.modVelTimer = (this.modVelTimer*movePlayerDir<this.RUN_STARTUP) ? this.modVelTimer+movePlayerDir : movePlayerDir*this.RUN_STARTUP;
-
+                player.footstep = ((player.footstep + 1) % 16)*player.grounded;
+                if (!player.footstep && player.grounded){
+                    player.walkNoise.detune = 0;
+                    player.walkNoise.play();
+                }
             } else {
                 player.anims.play('idle');
                 this.modVelTimer = (Math.abs(this.modVelTimer)) ? this.modVelTimer-Math.sign(this.modVelTimer) : 0;
                 player.velVector.x = Math.abs(player.velVector.x)>0.5 ? player.velVector.x/4 : 0;
+                player.footstep = 0;
             }
 
             // player jump
@@ -237,14 +343,20 @@ class Platformer extends Phaser.Scene {
             }
             if(player.cayoteJmp && Phaser.Input.Keyboard.JustDown(cursors.space)) {
                 player.velVector.y = (this.JUMP_VELOCITY);
+                player.jumpNoise.rate = 1;
+                player.jumpNoise.detune = 0;
+                player.jumpNoise.play();
                 player.cayoteJmp = 0;
                 player.setScale(SCALE*0.5,SCALE*1.5);
                 player.setOrigin(0.5,0.75);
             }
 
             //controllable jump height
-            if(player.velVector.y < 0 && !cursors.space.isDown)
+            if(player.velVector.y < 0 && !cursors.space.isDown){
                 player.velVector.y *= this.CURB_JUMP;
+                player.jumpNoise.rate = 3;
+                player.jumpNoise.detune = -1900;
+            }
 
             //hang time
             if(player.velVector.y>-200 && player.velVector.y<200 && cursors.space.isDown)
@@ -255,7 +367,7 @@ class Platformer extends Phaser.Scene {
                 player.velVector.y += (this.GRAVITY);
         }
         
-        //bbox handling
+        //player bbox handling
         if (this.PLAYER_BBOX[3]==2 && !(player.dckRll || player.dash)){
             let blocked = this.groundLayer.hasTileAtWorldXY(player.x+this.PLAYER_BBOX[0],player.y-14*SCALE)||
             this.groundLayer.hasTileAtWorldXY(player.x+this.PLAYER_BBOX[2],player.y-14*SCALE);
@@ -263,6 +375,38 @@ class Platformer extends Phaser.Scene {
             this.PLAYER_BBOX[4] = blocked ? 14 : 0;
             player.dckRll = blocked;
             player.velVector.x = blocked ? (player.flipX ? -1 : 1) : player.velVector.x;
+        }
+
+        //pitfall handling
+        if (player.y > 512-10){
+            player.health = -(player.health<300)*301;
+            player.dash = 0;
+            player.dckRll = 0;
+            player.anims.play('hurt');
+            player.velVector.x = (player.flipX) ? 7 : -7;
+            player.inactionable = player.velVector.x;
+            player.hurtNoise.play();
+            player.velVector.y = this.JUMP_VELOCITY*3;
+            player.setScale(SCALE*0.5,SCALE*1.5);
+        }
+
+        //death handling (allows for post mortem shenanigans and i quite like that)
+        if (!player.inactionable && player.health < 0){
+            if (!player.deadNoise.isPlaying && player.dead < 10)
+                player.deadNoise.play();
+            if (player.dead > 40){
+                COINS = Math.max(COINS-600,0);
+                this.scene.start('platformerScene');
+            }
+            player.anims.play('dead');
+            player.dead ++;
+            player.velVector = {x:0,y:0};
+        }
+
+        //win condition
+        if (-this.groundLayer.x > 6760){
+            COINS += player.y < 300 ? 300 : 0;
+            this.scene.start('platformerScene');
         }
 
         //cammera scrolling
@@ -280,35 +424,135 @@ class Platformer extends Phaser.Scene {
                 x.x -= (player.x-355);
             player.x -= (player.x-355);
         }
+        player.x = Math.max(player.x,0);
+
+        //combo handleing
+        if (this.COMBO.timer == 0){
+            this.COMBO.kills = 0;
+            this.COMBO.coins = 0;
+        }else
+            this.COMBO.timer -= player.grounded;
+        
+
+        //scoreboard handling
+        if (this.COMBO.timer == 0){
+            this.scoreboard.display += (this.scoreboard.display<COINS)/3;
+            this.scoreboard.text.setText("x "+Math.floor(this.scoreboard.display)+((player.health<300) ? "" : " Extra <3"));
+        }else{
+            let display = Math.floor(this.scoreboard.display)
+            display = ("x "+display)+" + "+(COINS-display);
+            display += (this.COMBO.kills+this.COMBO.coins > 1) ? " Combo "+(this.COMBO.kills+this.COMBO.coins)+"!" : "";
+            display += (player.health<300) ? "" : " Extra <3";
+            this.scoreboard.text.setText(display);
+        }
 
         //coin handling
         for (let x of this.coins){
-            if (x.x-14 > player.x+this.PLAYER_BBOX[2])
+            if (x.x-7*SCALE > player.x+this.PLAYER_BBOX[2])
                 continue;
-            if (x.x+14 < player.x+this.PLAYER_BBOX[0])
+            if (x.x+7*SCALE < player.x+this.PLAYER_BBOX[0])
                 continue;
-            if (x.y+14 < player.y+this.PLAYER_BBOX[3])
+            if (x.y+9*SCALE < player.y+this.PLAYER_BBOX[3])
                 continue;
-            if (x.y-14 > player.y+this.PLAYER_BBOX[5])
+            if (x.y-7*SCALE > player.y+this.PLAYER_BBOX[5])
                 continue;
-            COINS ++;
+            this.COMBO.coins = Math.min(this.COMBO.coins+1,15);
+            COINS += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
+            player.health += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
+            this.COMBO.timer = Math.min(this.COMBO.timer+20,60);
+            this.coinNoise.detune = this.COMBO.coins*50
+            this.coinNoise.play();
             x.destroy();
             this.coins.splice(this.coins.indexOf(x),1);
         }
 
         //enemy handling
         for (let x of this.enemies){
-            x.angle = 0;
-            //check if enemy is offscreen
-            if (clamp(x.x,-32,942) != x.x)
+            //culling based on enemy on-screen-ness
+            if (clamp(x.x,942,-32) != x.x)
                 continue;
-            if (clamp(x.y,-32,544) != x.y)
+            if (clamp(x.y,544,-32) != x.y)
                 continue;
-            x.angle = 30;
-            if (0){
-                x.destroy();
-                this.coins.splice(this.coins.indexOf(x),1);
+
+            x.velVector.y += this.GRAVITY;
+            
+            //enemy tile map collision
+            let i = x.velVector.y;
+            while( i ){
+                if (this.colliding(x,0,clamp(i,1,-1))){
+                    x.velVector.y = 0;
+                    break;
+                }else
+                    x.y += clamp(i,1,-1);
+                i -= clamp(i,1,-1);
             }
+            //tilemap and enemy to enemy collision
+            if (this.colliding(x,x.velVector.x,0))
+                x.velVector.x *= -1;
+            else
+                x.x += x.velVector.x;
+
+            //enemy to player collision
+            if (x.x-16 > player.x+this.PLAYER_BBOX[2])
+                continue;
+            if (x.x+16 < player.x+this.PLAYER_BBOX[0])
+                continue;
+            if (x.y+16 < player.y+this.PLAYER_BBOX[3])
+                continue;
+            if (x.y-16 > player.y+this.PLAYER_BBOX[5])
+                continue;
+
+            //enemy stomped
+            if (player.velVector.y > 0 && !player.grounded && !player.dash){
+                player.cayoteJmp = 0;
+                player.velVector.y = this.JUMP_VELOCITY;
+                player.inactionable = player.dckRll ? 0 : player.inactionable;
+                if (x.scaleX == SCALE){
+                    this.COMBO.kills = Math.min(this.COMBO.kills+1,15);
+                    COINS += (this.COMBO.kills+this.COMBO.coins);
+                    player.health += (this.COMBO.kills+this.COMBO.coins);
+                    this.COMBO.timer = 60;
+                    this.killNoise.detune = this.COMBO.kills*60
+                    x.destroy();
+                    this.enemies.splice(this.enemies.indexOf(x),1);
+                    this.killNoise.play();
+                    player.enemyStomp.explode(1, x.x, x.y);
+                    continue;
+                }
+            }
+            //enemy rolled over or dashed into
+            if (player.dash || (player.dckRll && Math.abs(player.velVector.x)>1)){
+                this.COMBO.kills = Math.min(this.COMBO.kills+1,15);
+                COINS += (this.COMBO.kills+this.COMBO.coins);
+                player.health += (this.COMBO.kills+this.COMBO.coins);
+                this.COMBO.timer = 60;
+                this.killNoise.detune = 60
+                x.destroy();
+                this.enemies.splice(this.enemies.indexOf(x),1);
+                this.killNoise.play();
+                if (x.scaleX == SCALE)
+                    player.enemyStomp.explode(1, x.x, x.y);
+                else
+                    player.bigEnemyStomp.explode(1, x.x, x.y);
+                continue;
+            }
+            
+
+            //enemy hit
+            player.health = -(player.health<300)*301;
+            player.anims.play('hurt');
+            player.velVector.x = (player.flipX) ? 7 : -7;
+            player.inactionable = player.velVector.x;
+            player.hurtNoise.play();
+            player.velVector.y = this.JUMP_VELOCITY;
+            player.setScale(SCALE*0.5,SCALE*1.5);
+            x.destroy();
+            this.enemies.splice(this.enemies.indexOf(x),1);
+            this.killNoise.play();
+            if (x.scaleX == SCALE)
+                player.enemyStomp.explode(1, x.x, x.y);
+            else
+                player.bigEnemyStomp.explode(1, x.x, x.y);
         }
     }
 }
