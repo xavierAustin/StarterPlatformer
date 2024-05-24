@@ -99,6 +99,7 @@ class Platformer extends Phaser.Scene {
         this.coinNoise = this.sound.add("coinies",{loop: 0, volume:0.7});
         this.killNoise = this.sound.add("killies",{loop: 0, volume:0.7});
         this.bonkNoise = this.sound.add("destries",{loop: 0, volume:0.7});
+        this.ebopNoise = this.sound.add("walkies",{loop: 0, volume:1, detune:-600});
         my.sprite.player.runningVfx = this.add.particles(0, 0, "platformer_misc", {
             frame: "tile_0008.png",
             random: true,
@@ -469,7 +470,7 @@ class Platformer extends Phaser.Scene {
         
         //scoreboard handling
         if (this.COMBO.timer == 0){
-            this.scoreboard.display += (this.scoreboard.display<COINS)/3+(COINS-this.scoreboard.display)/300;
+            this.scoreboard.display += (this.scoreboard.display<COINS)/3+(COINS-this.scoreboard.display)/1000;
             this.scoreboard.text.setText("x "+Math.floor(this.scoreboard.display)+((player.health<300) ? "" : " Extra \u2661"));
         }else{
             let display = Math.floor(this.scoreboard.display)
@@ -478,8 +479,9 @@ class Platformer extends Phaser.Scene {
             display += (player.health<300) ? "" : " Extra \u2661";
             this.scoreboard.text.setText(display);
         }
-        console.log(Math.floor(this.scoreboard.display) == COINS);
 
+        //object handling
+        let highPrioEnemys = [];
         //coin handling
         for (let x of this.objects){
             if (x.name == "coin"){
@@ -505,8 +507,10 @@ class Platformer extends Phaser.Scene {
             //culling based on enemy on-screen-ness
             if (clamp(x.x,942,-32) != x.x)
                 continue;
-            if (clamp(x.y,544,-32) != x.y)
-                continue;
+            if (clamp(x.y,544,-32) != x.y){
+                x.destroy();
+                this.objects.splice(this.objects.indexOf(x),1);
+            }
 
             x.velVector.y += this.GRAVITY;
             
@@ -515,16 +519,31 @@ class Platformer extends Phaser.Scene {
             while( i ){
                 if (this.colliding(x,0,clamp(i,1,-1))){
                     x.velVector.y = 0;
+                    x.velVector.x = (x.scaleX == SCALE ? 0.7 : 0.5)*Math.sign(x.velVector.x);
                     break;
                 }else
                     x.y += clamp(i,1,-1);
                 i -= clamp(i,1,-1);
             }
-            //tilemap and enemy to enemy collision
+            //enemy to tilemap collision
             if (this.colliding(x,x.velVector.x,0))
                 x.velVector.x *= -1;
             else
                 x.x += x.velVector.x;
+            
+            //enemy to enemy collision
+            for (let y of highPrioEnemys){
+                if (clamp(x.x,y.x+16*SCALE,y.x-16*SCALE) != x.x)
+                    continue;
+                if (clamp(x.y,y.y+16*SCALE,y.y-16*SCALE) != x.y)
+                    continue;
+                this.ebopNoise.play()
+                x.velVector.y = -10/x.scaleX;
+                x.velVector.x = (x.x < y.x ? -4 : 4)/x.scaleX;
+                y.velVector.y = -10/y.scaleX;
+                y.velVector.x = -x.velVector.x*x.scaleX/y.scaleX;
+            }
+            highPrioEnemys.push(x);
 
             //enemy to player collision
             if (clamp(x.x,player.x+this.PLAYER_BBOX[2]+8*SCALE,player.x+this.PLAYER_BBOX[0]-8*SCALE) != x.x)
