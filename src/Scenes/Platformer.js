@@ -40,35 +40,34 @@ class Platformer extends Phaser.Scene {
         this.decoreLayer = this.map.createLayer("DecoreLayer", this.tileset, 0, 0);
         this.decoreLayer.setScale(SCALE);
         //object layer
-        this.coins = this.map.createFromObjects("ObjectLayer", {
+        let coins = this.map.createFromObjects("ObjectLayer", {
             name: "coin",
             key: "platformer_misc",
             frame: "tile_0000.png"
         });
-        this.enemies = this.map.createFromObjects("ObjectLayer", {
+        let enemies = this.map.createFromObjects("ObjectLayer", {
             name: "enemy",
             key: "platformer_misc",
             frame: "tile_0001.png"
         });
-        this.bigEnemies = this.map.createFromObjects("ObjectLayer", {
+        let bigEnemies = this.map.createFromObjects("ObjectLayer", {
             name: "bigEnemy",
             key: "platformer_misc",
             frame: "tile_0004.png"
         });
-        this.objects = (this.coins).concat(this.enemies).concat(this.bigEnemies);
+        this.objects = (coins).concat(enemies).concat(bigEnemies);
         for (let x of this.objects){
             x.x *= 2;
             x.y *= 2;
             x.setScale(SCALE);
         }
-        this.enemies = this.enemies.concat(this.bigEnemies);
-        for (let x of this.enemies){
+        for (let x of enemies){
             x.velVector = {x:-0.7,y:0};
             x.anims.play('enemyWalk');
         }
-        for (let x of this.bigEnemies){
+        for (let x of bigEnemies){
             x.y -= 8;
-            x.velVector.x = -0.5;
+            x.velVector = {x:-0.5,y:0};
             x.setScale(SCALE*1.5);
             x.anims.play('bigEnemyWalk');
         }
@@ -179,6 +178,12 @@ class Platformer extends Phaser.Scene {
         this.bboxVisual = this.add.rectangle(0,0,this.PLAYER_BBOX[2]-this.PLAYER_BBOX[0],this.PLAYER_BBOX[5]-this.PLAYER_BBOX[3],0,0).setStrokeStyle(1,0xff00ff).setOrigin(0)
         this.velVecVisual = this.add.line(0,0,0,0,0,0,0x00ff00,1);
         this.BonkArea = this.add.line(0,0,0,0,0,0,0xff0000,1);
+        this.objectBbox = []
+        for (let x of this.objects){
+            let temp  = (x.name == "coin");
+            this.objectBbox[this.objects.indexOf(x)] = this.add.rectangle(0,0,16*SCALE-temp*SCALE*2,16*SCALE,0,0)
+            this.objectBbox[this.objects.indexOf(x)].setStrokeStyle(1,temp ? 0x0000ff : 0xff0000);
+        }
     }
     drawDebug(){
         let plrs = my.sprite.player;
@@ -193,14 +198,21 @@ class Platformer extends Phaser.Scene {
         else
             this.BonkArea.setStrokeStyle(1,0xffff00);
         this.velVecVisual.setTo(plrs.x,plrs.y,plrs.x+plrs.velVector.x*SCALE*10,plrs.y+plrs.velVector.y*SCALE*10);
+        if (this.objects.length != this.objectBbox.length){
+            this.destroyDebug()
+            this.initDebug()
+        }
+        for (let x of this.objects){
+            this.objectBbox[this.objects.indexOf(x)].x = x.x 
+            this.objectBbox[this.objects.indexOf(x)].y = x.y + (x.name == "coin")*SCALE
+        }
     }
     destroyDebug(){
         this.bboxVisual.destroy();
         this.velVecVisual.destroy();
         this.BonkArea.destroy();
-    }
-    doScreenShake(){
-
+        for (let x of this.objectBbox)
+            x.destroy();
     }
     //collision detection 
     //default phaser tile collision has false negatives occasionally and lets the player fall through the floor at a high enough velocity
@@ -216,31 +228,6 @@ class Platformer extends Phaser.Scene {
     }
     update() {
         let player = my.sprite.player;
-        //collision handling
-        let i = player.velVector.y;
-        let j = player.velVector.x;
-        while( i || j ){
-            if (this.colliding(player,0,clamp(i,1,-1),this.PLAYER_BBOX)){
-                player.grounded = (i > 0);
-                player.velVector.y = 0;
-                i = 0;
-            }else{
-                player.y += clamp(i,1,-1);
-                if (Math.sign(i))
-                    player.grounded = 0;
-            }
-            if (this.colliding(player,clamp(j,1,-1),0,this.PLAYER_BBOX)){
-                player.velVector.x = 0;
-                j = 0;
-            }else
-                player.x += clamp(j,1,-1);
-            i -= clamp(i,1,-1);
-            j -= clamp(j,1,-1);
-        }
-
-        //debug
-        if (this.debug)
-            this.drawDebug();
 
         //player squash and stretch
         player.setScale((player.scaleX*2 + SCALE)/3,(player.scaleY*2 + SCALE)/3);
@@ -424,6 +411,9 @@ class Platformer extends Phaser.Scene {
                 player.deadNoise.play();
             if (player.dead > 40){
                 COINS = Math.max(COINS-600,0);
+                if (this.debug)
+                    this.destroyDebug()
+                this.debug = false;
                 this.scene.start('platformerScene');
             }
             player.anims.play('dead');
@@ -437,6 +427,9 @@ class Platformer extends Phaser.Scene {
         //win condition
         if (-this.groundLayer.x > 6760){
             COINS += player.y < 300 ? 300 : 0;
+            if (this.debug)
+                this.destroyDebug()
+            this.debug = false;
             this.scene.start('platformerScene');
         }
 
@@ -476,7 +469,7 @@ class Platformer extends Phaser.Scene {
         
         //scoreboard handling
         if (this.COMBO.timer == 0){
-            this.scoreboard.display += (this.scoreboard.display<COINS)/3;
+            this.scoreboard.display += (this.scoreboard.display<COINS)/3+(COINS-this.scoreboard.display)/300;
             this.scoreboard.text.setText("x "+Math.floor(this.scoreboard.display)+((player.health<300) ? "" : " Extra \u2661"));
         }else{
             let display = Math.floor(this.scoreboard.display)
@@ -485,30 +478,30 @@ class Platformer extends Phaser.Scene {
             display += (player.health<300) ? "" : " Extra \u2661";
             this.scoreboard.text.setText(display);
         }
+        console.log(Math.floor(this.scoreboard.display) == COINS);
 
         //coin handling
-        for (let x of this.coins){
-            if (x.x-7*SCALE > player.x+this.PLAYER_BBOX[2])
-                continue;
-            if (x.x+7*SCALE < player.x+this.PLAYER_BBOX[0])
-                continue;
-            if (x.y+9*SCALE < player.y+this.PLAYER_BBOX[3])
-                continue;
-            if (x.y-7*SCALE > player.y+this.PLAYER_BBOX[5])
-                continue;
-            this.COMBO.coins = Math.min(this.COMBO.coins+1,15);
-            COINS += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
-            player.health += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
-            this.COMBO.timer = Math.min(this.COMBO.timer+20,60);
-            this.coinNoise.detune = this.COMBO.coins*50
-            this.coinNoise.play();
-            player.blockBopVfx.explode(1, x.x-this.groundLayer.x, x.y)
-            x.destroy();
-            this.coins.splice(this.coins.indexOf(x),1);
-        }
-
+        for (let x of this.objects){
+            if (x.name == "coin"){
+                if (x.x-7*SCALE > player.x+this.PLAYER_BBOX[2])
+                    continue;
+                if (x.x+7*SCALE < player.x+this.PLAYER_BBOX[0])
+                    continue;
+                if (x.y+9*SCALE < player.y+this.PLAYER_BBOX[3])
+                    continue;
+                if (x.y-7*SCALE > player.y+this.PLAYER_BBOX[5])
+                    continue;
+                this.COMBO.coins = Math.min(this.COMBO.coins+1,15);
+                COINS += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
+                player.health += Math.ceil((this.COMBO.kills+this.COMBO.coins)/2);
+                this.COMBO.timer = Math.min(this.COMBO.timer+20,60);
+                this.coinNoise.detune = this.COMBO.coins*50
+                this.coinNoise.play();
+                player.blockBopVfx.explode(1, x.x-this.groundLayer.x, x.y)
+                x.destroy();
+                this.objects.splice(this.objects.indexOf(x),1);
+            }else{
         //enemy handling
-        for (let x of this.enemies){
             //culling based on enemy on-screen-ness
             if (clamp(x.x,942,-32) != x.x)
                 continue;
@@ -534,9 +527,9 @@ class Platformer extends Phaser.Scene {
                 x.x += x.velVector.x;
 
             //enemy to player collision
-            if (clamp(x.x,player.x+this.PLAYER_BBOX[2]+16,player.x+this.PLAYER_BBOX[0]-16) != x.x)
+            if (clamp(x.x,player.x+this.PLAYER_BBOX[2]+8*SCALE,player.x+this.PLAYER_BBOX[0]-8*SCALE) != x.x)
                 continue;
-            if (clamp(x.y,player.y+this.PLAYER_BBOX[5]+16,player.y+this.PLAYER_BBOX[3]-16) != x.y)
+            if (clamp(x.y,player.y+this.PLAYER_BBOX[5]+8*SCALE,player.y+this.PLAYER_BBOX[3]-8*SCALE) != x.y)
                 continue;
             
             //enemy stomped
@@ -551,7 +544,7 @@ class Platformer extends Phaser.Scene {
                     this.COMBO.timer = 60;
                     this.killNoise.detune = this.COMBO.kills*50
                     x.destroy();
-                    this.enemies.splice(this.enemies.indexOf(x),1);
+                    this.objects.splice(this.objects.indexOf(x),1);
                     this.killNoise.play();
                     player.enemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
                     continue;
@@ -565,7 +558,7 @@ class Platformer extends Phaser.Scene {
                 this.COMBO.timer = 60;
                 this.killNoise.detune = this.COMBO.kills*50
                 x.destroy();
-                this.enemies.splice(this.enemies.indexOf(x),1);
+                this.objects.splice(this.objects.indexOf(x),1);
                 this.killNoise.play();
                 if (x.scaleX == SCALE)
                     player.enemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
@@ -584,12 +577,39 @@ class Platformer extends Phaser.Scene {
             player.velVector.y = this.JUMP_VELOCITY;
             player.setScale(SCALE*0.5,SCALE*1.5);
             x.destroy();
-            this.enemies.splice(this.enemies.indexOf(x),1);
+            this.objects.splice(this.objects.indexOf(x),1);
             this.killNoise.play();
             if (x.scaleX == SCALE)
                 player.enemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
             else
                 player.bigenemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
         }
+    }
+
+        //collision handling
+        let i = player.velVector.y;
+        let j = player.velVector.x;
+        while( i || j ){
+            if (this.colliding(player,0,clamp(i,1,-1),this.PLAYER_BBOX)){
+                player.grounded = (i > 0);
+                player.velVector.y = 0;
+                i = 0;
+            }else{
+                player.y += clamp(i,1,-1);
+                if (Math.sign(i))
+                    player.grounded = 0;
+            }
+            if (this.colliding(player,clamp(j,1,-1),0,this.PLAYER_BBOX)){
+                player.velVector.x = 0;
+                j = 0;
+            }else
+                player.x += clamp(j,1,-1);
+            i -= clamp(i,1,-1);
+            j -= clamp(j,1,-1);
+        }
+
+        //debug
+        if (this.debug)
+            this.drawDebug();
     }
 }
