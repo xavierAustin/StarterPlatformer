@@ -328,7 +328,7 @@ class Platformer extends Phaser.Scene {
             player.rollNoise.stop();
             player.rollNoise.playedOnce = 0;
         }else if (player.grounded){
-            player.runningVfx.explode(!Math.floor(Math.random()*20),player.x-this.groundLayer.x,player.y+this.PLAYER_BBOX[5]-4);
+            player.runningVfx.explode(!Math.floor(Math.random()*10),player.x-this.groundLayer.x,player.y+this.PLAYER_BBOX[5]-4);
         }
         let movePlayerDir = (cursors.right.isDown - cursors.left.isDown);
         if (!player.inactionable){
@@ -429,6 +429,9 @@ class Platformer extends Phaser.Scene {
             player.anims.play('dead');
             player.dead ++;
             player.velVector = {x:0,y:0};
+        }
+        if (player.health >= 0){
+            player.dead = 0;
         }
 
         //win condition
