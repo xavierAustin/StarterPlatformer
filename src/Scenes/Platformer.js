@@ -18,7 +18,7 @@ class Platformer extends Phaser.Scene {
         this.PLAYER_BBOX = [-8*SCALE,0,8*SCALE,-14*SCALE,0,16*SCALE]; //orgin +- distance to edge
         this.COMBO = {kills:0,timer:0,coins:0};
         if (!BGM){
-            BGM = this.sound.add("BGM",{loop:1,volume:0.7});
+            BGM = this.sound.add("BGM",{loop:1,volume:0.55});
             BGM.play()
         }
     }
@@ -92,15 +92,37 @@ class Platformer extends Phaser.Scene {
         my.sprite.player.walkNoise = this.sound.add("walkies",{loop: 0, volume:1});
         my.sprite.player.jumpNoise = this.sound.add("jumpies",{loop: 0, volume:0.3});
         my.sprite.player.dashNoise = this.sound.add("dashies",{loop: 0, volume:0.25});
-        my.sprite.player.hurtNoise = this.sound.add("hurties",{loop: 0, volume:0.3});
+        my.sprite.player.hurtNoise = this.sound.add("hurties",{loop: 0, volume:0.4});
         my.sprite.player.bonkNoise = this.sound.add("bonkies",{loop: 0, volume:0.4})
-        my.sprite.player.deadNoise = this.sound.add("deadies",{loop: 0, volume:0.4});
+        my.sprite.player.deadNoise = this.sound.add("deadies",{loop: 0, volume:0.6});
         my.sprite.player.rollNoise = this.sound.add("rollies",{loop: 0, volume:0.4});
         my.sprite.player.rollNoise.playedOnce = 0;
         this.coinNoise = this.sound.add("coinies",{loop: 0, volume:0.7});
         this.killNoise = this.sound.add("killies",{loop: 0, volume:0.7});
         this.bonkNoise = this.sound.add("destries",{loop: 0, volume:0.7});
-        my.sprite.player.blockBreak = this.add.particles(0, 0, "platformer_misc", {
+        my.sprite.player.runningVfx = this.add.particles(0, 0, "platformer_misc", {
+            frame: "tile_0008.png",
+            random: true,
+            scale: {start: SCALE/2, end: 0},
+            alpha: {start: 1, end: 0},
+            maxAliveParticles: 32,
+            lifespan: 350,
+            gravityY: 400,
+            speedX: [-90,-60,-30,30,60,90],
+            speedY: -50
+        });
+        my.sprite.player.runningVfx.stop()
+        my.sprite.player.blockBopVfx = this.add.particles(0, 0, "platformer_misc", {
+            frame: "tile_0000.png",
+            random: true,
+            scale: {start: SCALE, end: SCALE},
+            maxAliveParticles: 32,
+            lifespan: 200,
+            gravityY: 3200,
+            speedY: -400
+        });
+        my.sprite.player.blockBopVfx.stop()
+        my.sprite.player.blockBreakVfx = this.add.particles(0, 0, "platformer_misc", {
             frame: "tile_0007.png",
             random: true,
             scale: {start: SCALE/2, end: 0},
@@ -110,8 +132,8 @@ class Platformer extends Phaser.Scene {
             speedX: [-30,-15,5,15,30],
             speedY: -30
         });
-        my.sprite.player.blockBreak.stop()
-        my.sprite.player.enemyStomp = this.add.particles(0, 0, "platformer_misc", {
+        my.sprite.player.blockBreakVfx.stop()
+        my.sprite.player.enemyStompVfx = this.add.particles(0, 0, "platformer_misc", {
             frame: "tile_0003.png",
             random: true,
             scale: {start: SCALE, end: 0},
@@ -121,8 +143,8 @@ class Platformer extends Phaser.Scene {
             speedX: [-30,-15,5,15,30],
             speedY: -150
         });
-        my.sprite.player.enemyStomp.stop()
-        my.sprite.player.bigEnemyStomp = this.add.particles(0, 0, "platformer_misc", {
+        my.sprite.player.enemyStompVfx.stop()
+        my.sprite.player.bigenemyStompVfx = this.add.particles(0, 0, "platformer_misc", {
             frame: "tile_0006.png",
             random: true,
             scale: {start: SCALE*1.5, end: 0},
@@ -132,7 +154,7 @@ class Platformer extends Phaser.Scene {
             speedX: [-30,-15,5,15,30],
             speedY: -70
         });
-        my.sprite.player.bigEnemyStomp.stop()
+        my.sprite.player.bigenemyStompVfx.stop()
 
         //add score
         this.scoreboard = {
@@ -228,6 +250,7 @@ class Platformer extends Phaser.Scene {
             player.setOrigin(0.5,0);
             player.walkNoise.detune = -200;
             player.walkNoise.play();
+            player.runningVfx.explode(10,player.x-this.groundLayer.x,player.y+this.PLAYER_BBOX[5]-4);
         }
         player.prevGrounded = player.cayoteJmp;
 
@@ -271,12 +294,13 @@ class Platformer extends Phaser.Scene {
                     this.COMBO.timer = Math.min(this.COMBO.timer+20,60);
                     this.coinNoise.detune = this.COMBO.coins*50
                     this.coinNoise.play();
+                    player.blockBopVfx.explode(1, (x.x*16+8)*SCALE, (x.y*16-8)*SCALE)
                 }
                 if (x.index == 11){
-                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x, x.y*16*SCALE);
-                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x+8*SCALE, x.y*16*SCALE);
-                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x+8*SCALE, x.y*16*SCALE+8*SCALE);
-                    player.blockBreak.explode(1, x.x*16*SCALE+this.groundLayer.x, x.y*16*SCALE+8*SCALE);
+                    player.blockBreakVfx.explode(1, x.x*16*SCALE, x.y*16*SCALE);
+                    player.blockBreakVfx.explode(1, x.x*16*SCALE+8*SCALE, x.y*16*SCALE);
+                    player.blockBreakVfx.explode(1, x.x*16*SCALE+8*SCALE, x.y*16*SCALE+8*SCALE);
+                    player.blockBreakVfx.explode(1, x.x*16*SCALE, x.y*16*SCALE+8*SCALE);
                 }
                 if ((x.index == 8 || x.index == 11) && !this.bonkNoise.isPlaying)
                     this.bonkNoise.play();
@@ -303,6 +327,8 @@ class Platformer extends Phaser.Scene {
         if (player.anims.currentAnim.key != 'roll'){
             player.rollNoise.stop();
             player.rollNoise.playedOnce = 0;
+        }else if (player.grounded){
+            player.runningVfx.explode(!Math.floor(Math.random()*20),player.x-this.groundLayer.x,player.y+this.PLAYER_BBOX[5]-4);
         }
         let movePlayerDir = (cursors.right.isDown - cursors.left.isDown);
         if (!player.inactionable){
@@ -321,6 +347,7 @@ class Platformer extends Phaser.Scene {
                 if (!player.footstep && player.grounded){
                     player.walkNoise.detune = 0;
                     player.walkNoise.play();
+                    player.runningVfx.explode(2,player.x-this.groundLayer.x-movePlayerDir*10*SCALE,player.y+this.PLAYER_BBOX[5]-4);
                 }
             } else {
                 player.anims.play('idle');
@@ -347,6 +374,7 @@ class Platformer extends Phaser.Scene {
                 player.jumpNoise.detune = 0;
                 player.jumpNoise.play();
                 player.cayoteJmp = 0;
+                player.runningVfx.explode(10,player.x-this.groundLayer.x,player.y+this.PLAYER_BBOX[5]-4);
                 player.setScale(SCALE*0.5,SCALE*1.5);
                 player.setOrigin(0.5,0.75);
             }
@@ -379,7 +407,7 @@ class Platformer extends Phaser.Scene {
 
         //pitfall handling
         if (player.y > 512-10){
-            player.health = -(player.health<300)*301;
+            player.health = -(player.health<300)*91;
             player.dash = 0;
             player.dckRll = 0;
             player.anims.play('hurt');
@@ -413,6 +441,11 @@ class Platformer extends Phaser.Scene {
         if (player.x > 355){
             this.groundLayer.x -= (player.x-355);
             this.decoreLayer.x = this.groundLayer.x;
+            player.blockBreakVfx.x -= (player.x-355);
+            player.blockBopVfx.x -= (player.x-355);
+            player.enemyStompVfx.x -= (player.x-355);
+            player.bigenemyStompVfx.x -= (player.x-355);
+            player.runningVfx.x -= (player.x-355);
             for (let x of this.objects)
                 x.x -= (player.x-355);
             player.x -= (player.x-355);
@@ -420,6 +453,11 @@ class Platformer extends Phaser.Scene {
         if (player.x < 355 && this.groundLayer.x - (player.x-355) < 0){
             this.groundLayer.x -= (player.x-355);
             this.decoreLayer.x = this.groundLayer.x;
+            player.blockBreakVfx.x -= (player.x-355);
+            player.blockBopVfx.x -= (player.x-355);
+            player.enemyStompVfx.x -= (player.x-355);
+            player.bigenemyStompVfx.x -= (player.x-355);
+            player.runningVfx.x -= (player.x-355);
             for (let x of this.objects)
                 x.x -= (player.x-355);
             player.x -= (player.x-355);
@@ -433,16 +471,15 @@ class Platformer extends Phaser.Scene {
         }else
             this.COMBO.timer -= player.grounded;
         
-
         //scoreboard handling
         if (this.COMBO.timer == 0){
             this.scoreboard.display += (this.scoreboard.display<COINS)/3;
-            this.scoreboard.text.setText("x "+Math.floor(this.scoreboard.display)+((player.health<300) ? "" : " Extra <3"));
+            this.scoreboard.text.setText("x "+Math.floor(this.scoreboard.display)+((player.health<300) ? "" : " Extra \u2661"));
         }else{
             let display = Math.floor(this.scoreboard.display)
             display = ("x "+display)+" + "+(COINS-display);
             display += (this.COMBO.kills+this.COMBO.coins > 1) ? " Combo "+(this.COMBO.kills+this.COMBO.coins)+"!" : "";
-            display += (player.health<300) ? "" : " Extra <3";
+            display += (player.health<300) ? "" : " Extra \u2661";
             this.scoreboard.text.setText(display);
         }
 
@@ -462,6 +499,7 @@ class Platformer extends Phaser.Scene {
             this.COMBO.timer = Math.min(this.COMBO.timer+20,60);
             this.coinNoise.detune = this.COMBO.coins*50
             this.coinNoise.play();
+            player.blockBopVfx.explode(1, x.x-this.groundLayer.x, x.y)
             x.destroy();
             this.coins.splice(this.coins.indexOf(x),1);
         }
@@ -493,15 +531,11 @@ class Platformer extends Phaser.Scene {
                 x.x += x.velVector.x;
 
             //enemy to player collision
-            if (x.x-16 > player.x+this.PLAYER_BBOX[2])
+            if (clamp(x.x,player.x+this.PLAYER_BBOX[2]+16,player.x+this.PLAYER_BBOX[0]-16) != x.x)
                 continue;
-            if (x.x+16 < player.x+this.PLAYER_BBOX[0])
+            if (clamp(x.y,player.y+this.PLAYER_BBOX[5]+16,player.y+this.PLAYER_BBOX[3]-16) != x.y)
                 continue;
-            if (x.y+16 < player.y+this.PLAYER_BBOX[3])
-                continue;
-            if (x.y-16 > player.y+this.PLAYER_BBOX[5])
-                continue;
-
+            
             //enemy stomped
             if (player.velVector.y > 0 && !player.grounded && !player.dash){
                 player.cayoteJmp = 0;
@@ -512,11 +546,11 @@ class Platformer extends Phaser.Scene {
                     COINS += (this.COMBO.kills+this.COMBO.coins);
                     player.health += (this.COMBO.kills+this.COMBO.coins);
                     this.COMBO.timer = 60;
-                    this.killNoise.detune = this.COMBO.kills*60
+                    this.killNoise.detune = this.COMBO.kills*50
                     x.destroy();
                     this.enemies.splice(this.enemies.indexOf(x),1);
                     this.killNoise.play();
-                    player.enemyStomp.explode(1, x.x, x.y);
+                    player.enemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
                     continue;
                 }
             }
@@ -526,20 +560,20 @@ class Platformer extends Phaser.Scene {
                 COINS += (this.COMBO.kills+this.COMBO.coins);
                 player.health += (this.COMBO.kills+this.COMBO.coins);
                 this.COMBO.timer = 60;
-                this.killNoise.detune = 60
+                this.killNoise.detune = this.COMBO.kills*50
                 x.destroy();
                 this.enemies.splice(this.enemies.indexOf(x),1);
                 this.killNoise.play();
                 if (x.scaleX == SCALE)
-                    player.enemyStomp.explode(1, x.x, x.y);
+                    player.enemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
                 else
-                    player.bigEnemyStomp.explode(1, x.x, x.y);
+                    player.bigenemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
                 continue;
             }
             
 
             //enemy hit
-            player.health = -(player.health<300)*301;
+            player.health = -(player.health<300)*91;
             player.anims.play('hurt');
             player.velVector.x = (player.flipX) ? 7 : -7;
             player.inactionable = player.velVector.x;
@@ -550,9 +584,9 @@ class Platformer extends Phaser.Scene {
             this.enemies.splice(this.enemies.indexOf(x),1);
             this.killNoise.play();
             if (x.scaleX == SCALE)
-                player.enemyStomp.explode(1, x.x, x.y);
+                player.enemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
             else
-                player.bigEnemyStomp.explode(1, x.x, x.y);
+                player.bigenemyStompVfx.explode(1, x.x-this.groundLayer.x, x.y);
         }
     }
 }
